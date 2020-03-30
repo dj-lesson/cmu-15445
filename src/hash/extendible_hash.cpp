@@ -49,7 +49,7 @@ int ExtendibleHash<K, V>::GetGlobalDepth() const {
  */
 template <typename K, typename V>
 int ExtendibleHash<K, V>::GetLocalDepth(int bucket_id) const {
-  assert(bucket_id < bucket_num);
+  // assert(bucket_id < bucket_num);
   return (dict[bucket_id])->getLocalDepth();
 }
 
@@ -101,8 +101,37 @@ bool ExtendibleHash<K, V>::Remove(const K &key) {
  */
 template <typename K, typename V>
 void ExtendibleHash<K, V>::Insert(const K &key, const V &value) {
-  ExtendibleBucket<K,V>* bucket = dict[getDictKey(key)];
-  bucket->getKvs().insert(std::make_pair(key, value));
+  int dict_key = getDictKey(key);
+  ExtendibleBucket<K,V>* bucket = dict[dict_key];
+  if (bucket->getKvs().size()<bucket_size) {
+    bucket->getKvs().insert(std::make_pair(key, value));
+    return;
+  }
+  if (bucket->getLocalDepth() < global_depth) {
+    for (int i = 0; i < dict.size(); i++) {
+      if ((i & ((1 << bucket->getLocalDepth()) - 1)) == (dict_key & ((1 << bucket->getLocalDepth()) - 1))) {
+        dict[i] = new ExtendibleBucket<K, V>(bucket_size);
+      }
+    }
+    for (typename std::map<K, V>::iterator iter = bucket->getKvs().begin(); iter != bucket->getKvs().end(); iter++){
+      dict[getDictKey(iter->first)]->getKvs().insert(std::make_pair(iter->first, iter->second));
+    }
+    bucket->setLocalDepth(global_depth);
+  } else {
+    global_depth += 1;
+    int current_size = dict.size();
+    for (int i = current_size; i < 2*current_size; i++) {
+      dict.push_back(dict[i-current_size]);
+    }
+    dict[dict_key] = new ExtendibleBucket<K, V>(bucket_size);
+    dict[dict_key]->setLocalDepth(global_depth);
+    dict[dict_key + current_size] = new ExtendibleBucket<K, V>(bucket_size);
+    dict[dict_key + current_size] -> setLocalDepth(global_depth);
+    for (typename std::map<K, V>::iterator iter = bucket->getKvs().begin(); iter != bucket->getKvs().end(); iter++){
+      dict[getDictKey(iter->first)]->getKvs().insert(std::make_pair(iter->first, iter->second));
+    }
+  }
+  dict[getDictKey(key)]->getKvs().insert(std::make_pair(key, value));
 }
 
 template class ExtendibleHash<page_id_t, Page *>;

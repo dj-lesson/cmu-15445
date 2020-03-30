@@ -31,6 +31,9 @@ public:
   std::map<K, V>& getKvs(){
     return kvs;
   }
+  void setLocalDepth(int local_depth_){
+    local_depth = local_depth_;
+  }
 private:
   int local_depth;
   std::map<K, V> kvs;
