@@ -12,10 +12,29 @@
 #include <cstdlib>
 #include <vector>
 #include <string>
+#include <map>
+#include <assert.h>
 
 #include "hash/hash_table.h"
 
 namespace cmudb {
+template <typename K, typename V>
+class ExtendibleBucket{
+public:
+  ExtendibleBucket(int local_depth_i): local_depth(local_depth_i){
+  }
+  ~ExtendibleBucket(){
+  }
+  int getLocalDepth(){
+    return local_depth;
+  }
+  std::map<K, V>& getKvs(){
+    return kvs;
+  }
+private:
+  int local_depth;
+  std::map<K, V> kvs;
+};
 
 template <typename K, typename V>
 class ExtendibleHash : public HashTable<K, V> {
@@ -35,5 +54,11 @@ public:
 
 private:
   // add your own member variables here
+  std::hash<K> hasher;
+  std::vector<ExtendibleBucket<K, V>*> dict;
+  size_t global_depth;
+  size_t bucket_size;
+  int bucket_num;
+  int getDictKey(K key);
 };
 } // namespace cmudb

@@ -10,23 +10,37 @@ namespace cmudb {
  * array_size: fixed array size for each bucket
  */
 template <typename K, typename V>
-ExtendibleHash<K, V>::ExtendibleHash(size_t size) {}
+ExtendibleHash<K, V>::ExtendibleHash(size_t size) {
+  global_depth = 1;
+  bucket_size = size;
+  bucket_num = 2;
+  dict.push_back(new ExtendibleBucket<K, V>(1));
+  dict.push_back(new ExtendibleBucket<K, V>(1));
+}
 
 /*
  * helper function to calculate the hashing address of input key
  */
 template <typename K, typename V>
 size_t ExtendibleHash<K, V>::HashKey(const K &key) {
-  return 0;
+  return hasher(key);
 }
 
+/**
+ * AnDJ(Junduo Dong)
+ * get dict key
+ */
+template <typename K, typename V>
+int ExtendibleHash<K, V>::getDictKey(K key){
+  return HashKey(key) & ((1 << global_depth) - 1);
+}
 /*
  * helper function to return global depth of hash table
  * NOTE: you must implement this function in order to pass test
  */
 template <typename K, typename V>
 int ExtendibleHash<K, V>::GetGlobalDepth() const {
-  return 0;
+  return global_depth;
 }
 
 /*
@@ -35,7 +49,8 @@ int ExtendibleHash<K, V>::GetGlobalDepth() const {
  */
 template <typename K, typename V>
 int ExtendibleHash<K, V>::GetLocalDepth(int bucket_id) const {
-  return 0;
+  assert(bucket_id < bucket_num);
+  return (dict[bucket_id])->getLocalDepth();
 }
 
 /*
@@ -43,7 +58,7 @@ int ExtendibleHash<K, V>::GetLocalDepth(int bucket_id) const {
  */
 template <typename K, typename V>
 int ExtendibleHash<K, V>::GetNumBuckets() const {
-  return 0;
+  return bucket_num;
 }
 
 /*
@@ -51,7 +66,18 @@ int ExtendibleHash<K, V>::GetNumBuckets() const {
  */
 template <typename K, typename V>
 bool ExtendibleHash<K, V>::Find(const K &key, V &value) {
-  return false;
+  int dict_key = getDictKey(key);
+  if (dict_key >= dict.size()) {
+    return false;
+  }
+  ExtendibleBucket<K, V>* bucket = dict[dict_key];
+  typename std::map<K, V>::iterator res = bucket->getKvs().find(key);
+  if (res != bucket->getKvs().end()){
+    value = res->second;
+    return true;
+  }else{
+    return false;
+  }
 }
 
 /*
@@ -60,7 +86,12 @@ bool ExtendibleHash<K, V>::Find(const K &key, V &value) {
  */
 template <typename K, typename V>
 bool ExtendibleHash<K, V>::Remove(const K &key) {
-  return false;
+  int dict_key = getDictKey(key);
+  if (dict_key >= dict.size()) {
+    return true;
+  }
+  ExtendibleBucket<K, V>* bucket = dict[dict_key];
+  return bucket->getKvs().erase(key);
 }
 
 /*
@@ -69,7 +100,10 @@ bool ExtendibleHash<K, V>::Remove(const K &key) {
  * global depth
  */
 template <typename K, typename V>
-void ExtendibleHash<K, V>::Insert(const K &key, const V &value) {}
+void ExtendibleHash<K, V>::Insert(const K &key, const V &value) {
+  ExtendibleBucket<K,V>* bucket = dict[getDictKey(key)];
+  bucket->getKvs().insert(std::make_pair(key, value));
+}
 
 template class ExtendibleHash<page_id_t, Page *>;
 template class ExtendibleHash<Page *, std::list<Page *>::iterator>;
