@@ -14,6 +14,18 @@
 
 namespace cmudb {
 
+template <typename T>
+struct LruListNode{
+  LruListNode<T>* front;
+  LruListNode<T>* last;
+  T value; 
+  LruListNode<T>(T value_){
+    front = NULL;
+    last = NULL;
+    value = value_;
+  }
+};
+
 template <typename T> class LRUReplacer : public Replacer<T> {
 public:
   // do not change public interface
@@ -31,6 +43,9 @@ public:
 
 private:
   // add your member variables here
+  std::map<T, LruListNode<T>*> lru_map;
+  LruListNode<T>* head;
+  LruListNode<T>* tail;
 };
 
 } // namespace cmudb
