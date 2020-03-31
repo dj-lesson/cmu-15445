@@ -14,6 +14,7 @@
 #include <string>
 #include <map>
 #include <assert.h>
+#include <mutex>
 
 #include "hash/hash_table.h"
 
@@ -61,6 +62,7 @@ private:
   std::vector<ExtendibleBucket<K, V>*> dict;
   size_t global_depth;
   size_t bucket_size;
+  mutable std::mutex latch;
   int bucket_num;
   int getDictKey(K key);
 };

@@ -40,6 +40,7 @@ int ExtendibleHash<K, V>::getDictKey(K key){
  */
 template <typename K, typename V>
 int ExtendibleHash<K, V>::GetGlobalDepth() const {
+  std::lock_guard<std::mutex> lock(latch);
   return global_depth;
 }
 
@@ -66,6 +67,7 @@ int ExtendibleHash<K, V>::GetNumBuckets() const {
  */
 template <typename K, typename V>
 bool ExtendibleHash<K, V>::Find(const K &key, V &value) {
+  std::lock_guard<std::mutex> lock(latch);
   int dict_key = getDictKey(key);
   if (dict_key >= dict.size()) {
     return false;
@@ -86,6 +88,7 @@ bool ExtendibleHash<K, V>::Find(const K &key, V &value) {
  */
 template <typename K, typename V>
 bool ExtendibleHash<K, V>::Remove(const K &key) {
+  std::lock_guard<std::mutex> lock(latch);
   int dict_key = getDictKey(key);
   if (dict_key >= dict.size()) {
     return true;
@@ -101,37 +104,57 @@ bool ExtendibleHash<K, V>::Remove(const K &key) {
  */
 template <typename K, typename V>
 void ExtendibleHash<K, V>::Insert(const K &key, const V &value) {
-  int dict_key = getDictKey(key);
-  ExtendibleBucket<K,V>* bucket = dict[dict_key];
-  if (bucket->getKvs().size()<bucket_size) {
-    bucket->getKvs().insert(std::make_pair(key, value));
-    return;
-  }
-  if (bucket->getLocalDepth() < global_depth) {
-    for (int i = 0; i < dict.size(); i++) {
-      if ((i & ((1 << bucket->getLocalDepth()) - 1)) == (dict_key & ((1 << bucket->getLocalDepth()) - 1))) {
-        dict[i] = new ExtendibleBucket<K, V>(bucket_size);
+  std::lock_guard<std::mutex> lock(latch);
+  while (true) {
+    ExtendibleBucket<K,V>* bucket = dict[getDictKey(key)];
+    /**
+     * bucket is not full, insert into it.
+     */
+    if (bucket->getKvs().size() < bucket_size) {
+      bucket->getKvs().insert(std::make_pair(key, value));
+      return;
+    }
+    /**
+     * bucket is full, and bucket.local_depth < global_depth
+     * split it to 2 bucket.
+     */
+    if (bucket->getLocalDepth() < global_depth) {
+      int diff = global_depth - bucket->getLocalDepth() - 1;
+      int prefix = (1 << diff) - 1;
+      int local_mask = (1 << bucket->getLocalDepth()) - 1;
+      
+      ExtendibleBucket<K, V>* t_bucket_1 = new ExtendibleBucket<K, V>(bucket_size);
+      t_bucket_1->setLocalDepth(bucket->getLocalDepth() + 1);
+      ExtendibleBucket<K, V>* t_bucket_2 = new ExtendibleBucket<K, V>(bucket_size);
+      t_bucket_2->setLocalDepth(bucket->getLocalDepth() + 1);
+      for (int i = 0; i <= prefix; i++) {
+        dict[prefix | (getDictKey(key) & local_mask)] = t_bucket_1;
+        dict[prefix | (local_mask + 1) | (getDictKey(key) & local_mask)] = t_bucket_2;
+      }
+      for ( typename std::map<K, V>::iterator iter = bucket->getKvs().begin(); iter != bucket->getKvs().end(); iter++ ) {
+        dict[getDictKey(iter->first)]->getKvs().insert(std::make_pair(iter->first, iter->second));
+      }
+    /**
+     * bucket is full, and bucket.local_depth == global_depth
+     * double dict and reshuffle.
+     */
+    } else {
+      global_depth += 1;
+      int current_size = dict.size();
+      for (int i = current_size; i < 2*current_size; i++) {
+        dict.push_back(dict[i-current_size]);
+      }
+      int dict_key = getDictKey(key);
+      dict[dict_key] = new ExtendibleBucket<K, V>(bucket_size);
+      dict[dict_key]->setLocalDepth(global_depth);
+      dict[dict_key + current_size] = new ExtendibleBucket<K, V>(bucket_size);
+      dict[dict_key + current_size] -> setLocalDepth(global_depth);
+      for (typename std::map<K, V>::iterator iter = bucket->getKvs().begin(); iter != bucket->getKvs().end(); iter++){
+        dict[getDictKey(iter->first)]->getKvs().insert(std::make_pair(iter->first, iter->second));
       }
     }
-    for (typename std::map<K, V>::iterator iter = bucket->getKvs().begin(); iter != bucket->getKvs().end(); iter++){
-      dict[getDictKey(iter->first)]->getKvs().insert(std::make_pair(iter->first, iter->second));
-    }
-    bucket->setLocalDepth(global_depth);
-  } else {
-    global_depth += 1;
-    int current_size = dict.size();
-    for (int i = current_size; i < 2*current_size; i++) {
-      dict.push_back(dict[i-current_size]);
-    }
-    dict[dict_key] = new ExtendibleBucket<K, V>(bucket_size);
-    dict[dict_key]->setLocalDepth(global_depth);
-    dict[dict_key + current_size] = new ExtendibleBucket<K, V>(bucket_size);
-    dict[dict_key + current_size] -> setLocalDepth(global_depth);
-    for (typename std::map<K, V>::iterator iter = bucket->getKvs().begin(); iter != bucket->getKvs().end(); iter++){
-      dict[getDictKey(iter->first)]->getKvs().insert(std::make_pair(iter->first, iter->second));
-    }
+    bucket_num ++ ;
   }
-  dict[getDictKey(key)]->getKvs().insert(std::make_pair(key, value));
 }
 
 template class ExtendibleHash<page_id_t, Page *>;
