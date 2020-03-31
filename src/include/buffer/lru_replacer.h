@@ -46,6 +46,7 @@ private:
   std::map<T, LruListNode<T>*> lru_map;
   LruListNode<T>* head;
   LruListNode<T>* tail;
+  mutable std::mutex latch;
 };
 
 } // namespace cmudb

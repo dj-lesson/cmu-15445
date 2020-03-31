@@ -17,6 +17,7 @@ template <typename T> LRUReplacer<T>::~LRUReplacer() {}
  * Insert value into LRU
  */
 template <typename T> void LRUReplacer<T>::Insert(const T &value) {
+  std::lock_guard<std::mutex> lock(latch);
   typename std::map<T, LruListNode<T>*>::iterator iter = lru_map.find(value);
   LruListNode<T>* node = NULL;
   if (iter == lru_map.end()) {
@@ -51,6 +52,7 @@ template <typename T> void LRUReplacer<T>::Insert(const T &value) {
  * return true. If LRU is empty, return false
  */
 template <typename T> bool LRUReplacer<T>::Victim(T &value) {
+  std::lock_guard<std::mutex> lock(latch);
   if (lru_map.size() == 0) {
     return false;
   }
@@ -58,6 +60,7 @@ template <typename T> bool LRUReplacer<T>::Victim(T &value) {
   typename std::map<T, LruListNode<T>*>::iterator iter = lru_map.find(value);
   iter->second->front->last = NULL;
   tail = iter->second->front;
+  delete iter->second;
   lru_map.erase(iter);
   return true;
 }
@@ -67,6 +70,7 @@ template <typename T> bool LRUReplacer<T>::Victim(T &value) {
  * return false
  */
 template <typename T> bool LRUReplacer<T>::Erase(const T &value) {
+  std::lock_guard<std::mutex> lock(latch);
   typename std::map<T, LruListNode<T>*>::iterator iter = lru_map.find(value);
   if (iter == lru_map.end()) {
     return false;
@@ -82,11 +86,13 @@ template <typename T> bool LRUReplacer<T>::Erase(const T &value) {
     node->front->last = node->last;
     node->last->front = node->front;
   }
+  delete iter->second;
   lru_map.erase(iter);
   return true;
 }
 
 template <typename T> size_t LRUReplacer<T>::Size() { 
+  std::lock_guard<std::mutex> lock(latch);
   return lru_map.size();  
 }
 
