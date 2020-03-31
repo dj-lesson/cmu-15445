@@ -154,6 +154,7 @@ void ExtendibleHash<K, V>::Insert(const K &key, const V &value) {
       }
     }
     bucket_num ++ ;
+    delete bucket;
   }
 }
 
