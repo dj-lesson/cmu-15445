@@ -7,8 +7,8 @@
 namespace cmudb {
 
 template <typename T> LRUReplacer<T>::LRUReplacer() {
-  head = NULL;
-  tail = NULL;
+  head = nullptr;
+  tail = nullptr;
 }
 
 template <typename T> LRUReplacer<T>::~LRUReplacer() {}
@@ -19,11 +19,11 @@ template <typename T> LRUReplacer<T>::~LRUReplacer() {}
 template <typename T> void LRUReplacer<T>::Insert(const T &value) {
   std::lock_guard<std::mutex> lock(latch);
   typename std::map<T, LruListNode<T>*>::iterator iter = lru_map.find(value);
-  LruListNode<T>* node = NULL;
+  LruListNode<T>* node = nullptr;
   if (iter == lru_map.end()) {
     node = new LruListNode<T>(value);
     lru_map.insert(std::make_pair(value, node));
-    if (head == NULL){
+    if (head == nullptr){
       head = tail = node;
       return;
     }
@@ -38,7 +38,7 @@ template <typename T> void LRUReplacer<T>::Insert(const T &value) {
     node->front->last = node->last;
     if (node == tail) {
       tail = node->front;
-      tail -> last = NULL;
+      tail -> last = nullptr;
     } else {
       node->last->front = node->front;
     }
@@ -58,8 +58,12 @@ template <typename T> bool LRUReplacer<T>::Victim(T &value) {
   }
   value = tail->value;
   typename std::map<T, LruListNode<T>*>::iterator iter = lru_map.find(value);
-  iter->second->front->last = NULL;
-  tail = iter->second->front;
+  if (iter->second == head) {
+    head = tail = nullptr;
+  } else {
+    iter->second->front->last = nullptr;
+    tail = iter->second->front;
+  }
   delete iter->second;
   lru_map.erase(iter);
   return true;
@@ -77,10 +81,10 @@ template <typename T> bool LRUReplacer<T>::Erase(const T &value) {
   }
   LruListNode<T>* node = iter->second;
   if (node == head) {
-    node->last->front = NULL;
+    node->last->front = nullptr;
     head = node->last;
   } else if (node == tail) {
-    node->front->last = NULL;
+    node->front->last = nullptr;
     tail = node->front;
   } else {
     node->front->last = node->last;
