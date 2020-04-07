@@ -18,7 +18,22 @@ namespace cmudb {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(page_id_t page_id,
-                                          page_id_t parent_id) {}
+                                          page_id_t parent_id) {
+  SetPageType(IndexPageType::INTERNAL_PAGE);
+  SetSize(0);
+  SetPageId(page_id);
+  SetParentPageId(parent_id);
+  /**
+   * comment by AnDJ(Junduo Dong):
+   * 
+   * b_plut_tree_internal_page layout below
+   * -----------------------------------------------------
+   * | HEADER | <none, c> | <k, c> | <k, c> | <k, c> | ...
+   * -----------------------------------------------------
+   * so num(c) = (page_size - header) / size_kc - 1
+   */
+  SetMaxSize((PAGE_SIZE - sizeof(BPlusTreeInternalPage))/sizeof(MappingType) - 1);
+}
 /*
  * Helper method to get/set the key associated with input "index"(a.k.a
  * array offset)
@@ -61,6 +76,17 @@ INDEX_TEMPLATE_ARGUMENTS
 ValueType
 B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key,
                                        const KeyComparator &comparator) const {
+  int start = 1;
+  int end = GetSize() - 1;
+  int mid = 0;
+  while (start + 1 < end) {
+    mid = (end - start)/2 + start;
+    if (comparator(array[mid].first, key) >= 0) end = mid;
+    else start = mid;
+  }
+  if (comparator(array[start].first, key) == 0) return array[start].second;
+  if (comparator(array[end].first, key) == 0) return array[end].second;
+  
   return INVALID_PAGE_ID;
 }
 

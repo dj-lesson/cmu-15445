@@ -20,7 +20,24 @@ namespace cmudb {
  * next page id and set max size
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id) {
+    SetPageType(IndexPageType::LEAF_PAGE);
+  SetSize(0);
+  SetPageId(page_id);
+  SetParentPageId(parent_id);
+  next_page_id_ = INVALID_PAGE_ID;
+  /**
+   * comment by AnDJ(Junduo Dong):
+   * 
+   * b_plut_tree_leaf_page layout below
+   * ----------------------------------------------------------
+   * | HEADER | <k, rid> | <k, rid> | <k, rid> | <k, rid> | ...
+   * ----------------------------------------------------------
+   * so num(rid) = (page_size - header) / size_k_rid
+   * more minus 1 for split conveniently
+   */
+  SetMaxSize((PAGE_SIZE - sizeof(BPlusTreeLeafPage))/sizeof(MappingType) - 1);
+}
 
 /**
  * Helper methods to set/get next page id
@@ -40,7 +57,17 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {}
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(
     const KeyType &key, const KeyComparator &comparator) const {
-  return 0;
+  int start = 0;
+  int end = GetSize() - 1;
+  int mid = -1;
+  while (start + 1 < end) {
+    mid = (end - start) / 2 + start;
+    if (comparator(array[mid].first, key) >= 0) end = mid;
+    else start = mid;
+  }
+  if (comparator(array[start].first, key) == 0) return start;
+  if (comparator(array[end].first, key) == 0) return end;
+  return -1;
 }
 
 /*
